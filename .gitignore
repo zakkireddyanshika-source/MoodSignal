@@ -1,0 +1,32 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Large model files — too big for GitHub
+models/mentalbert_model/
+models/*.pt
+models/*.pkl
+
+# Raw data — keep off GitHub
+data/raw/
+data/processed/
+
+# Output images
+outputs/*.png
+outputs/*.csv
+
+# VS Code settings
+.vscode/
+
+# virtual environment
+.venv/
+
+# claude code and agent settings
+.claude/
+.agents/
+
+# training logs
+notebooks/*.log
+
+# nested repo folder
+MoodSignal-2026-/
