@@ -2,7 +2,7 @@
 
 NLP-based classification of bipolar disorder, depression, and anxiety from text.
 
-Built by Anshika Zakkireddy and Varish Matlapudi — AI/ML Workshop Project 2026.
+Built by Anshika Zakkireddy and Varish Matlapudi and Anakin Dasgupta - AI/ML Workshop Project 2026.
 
 ## What it does
 
