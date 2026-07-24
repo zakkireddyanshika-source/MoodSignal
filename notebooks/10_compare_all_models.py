@@ -16,86 +16,57 @@ x_train, x_test, y_train, y_test = train_test_split(
 )
 baseline_model = joblib.load("models/baseline_model.pkl")
 vectorizer = joblib.load("models/tfidf_vectorizer.pkl")
-
-baseline_preds = baseline_model.predict(vectorizer.transform(x_test))
-baseline_accuracy = accuracy_score(y_test, baseline_preds)
-baseline_f1 = f1_score(y_test, baseline_preds, average=None)
-print(f"Base accuracy: {baseline_accuracy:.1%}")
+preds = baseline_model.predict(vectorizer.transform(x_test))
+results["Baseline"] = {
+    "accuracy": accuracy_score(y_test, preds),
+    "f1_per_class": f1_score(y_test, preds, average=None)
+}
+print("baseline done")
 
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 tokenizer = AutoTokenizer.from_pretrained("models/mentalbert_model")
 bert_model = AutoModelForSequenceClassification.from_pretrained("models/mentalbert_model")
 bert_model.eval()
-
-tokens = tokenizer(list(x_test), max_length = 256, truncation=True, padding="max_length", return_tensors="pt")
+tokens = tokenizer(list(x_test), max_length=256, truncation=True, padding="max_length", return_tensors="pt")
 with torch.no_grad():
-    bert_preds = bert_model(**tokens).logits.argmax(1).numpy()
+    logits = bert_model(**tokens).logits
+bert_preds = logits.argmax(1).numpy()
+results["MentalBERT"] = {
+    "accuracy": accuracy_score(y_test, bert_preds),
+    "f1_per_class": f1_score(y_test, bert_preds, average=None)
+}
+print("mentalbert done")
 
-bert_accuracy = accuracy_score(y_test, bert_preds)
-bert_f1 = f1_score(y_test, bert_preds, average=None)
-print(f"mentalbert acc: {bert_accuracy:.1%}")
+# print the table
+print("\nmodel comparison:")
+for name, r in results.items():
+    print(f"{name}: accuracy {r['accuracy']:.1%}, f1 per class {r['f1_per_class'].round(2)}")
 
-vocab = joblib.load("models/bilstm_vocab.pkl")
-
-def encode(post):
-    return ([vocab.get(word, 1) for word in post.split()] * [0] * 200)[:200]
-
-class BiLSTMModel(nn.Module):
-    def __init__(self, vocab_size):
-        super().__init__()
-        self.embedding = nn.Embedding(vocab_size, 128, padding_idx=0)
-        self.lstm = nn.LSTM(128, 128, bidirectional=True, batch_first=True)
-        self.dropout = nn.Dropout(0.3)
-        self.linear = nn.Linear(256, 3)
-
-    def forward(self, x):
-        out, _ = self.lstm(self.embedding(x))
-        return self.linear(self.dropout(out.mean(dim=1)))
-
-lstm_model = BiLSTMModel(len(vocab)*2)
-lstm_model.load_state_dict(torch.load("models/bilstm_model.pt"))
-lstm_model.eval()
-
-encoded_test = torch.tensor([encode(post) for post in x_test])
-with torch.no_grad():
-    lstm_preds = lstm_model(encoded_test).argmax(1).numpy()
-
-lstm_accuracy = accuracy_score(y_test, lstm_preds)
-lstm_f1 = f1_score(y_test, lstm_preds, average=None)
-print(f"BiLSTM acc: {lstm_accuracy:.1%}")
-
-print("\nModel Comparison")
-print(f"{'model':<12} {'accuracy':<10} {'bipolar':<10} {'depression':<12} {'anxiety'}")
-print(f"{'baseline':<12} {baseline_accuracy:<10.1%} {baseline_f1[0]:<10.2f} {baseline_f1[1]:<12.2f} {baseline_f1[2]:.2f}")
-print(f"{'bilstm':<12} {lstm_accuracy:<10.1%} {lstm_f1:<10.2f} {lstm_f1[1]:<12.2f} {lstm_f1[2]:.2f}")
-print(f"{'mentalbert':<12} {bert_accuracy:<10.1%} {bert_f1:<10.2f} {bert_f1[1]:<12.2f} {bert_f1[2]:.2f}")
-
-os.makedirs("outputs", exist_ok=True)
-
-plt.figure(figsize=(6,4))
-names = ["Baseline", "BiLSTM", "MentalBERT"]
-accs = [baseline_accuracy*100, lstm_accuracy*100, bert_accuracy*100]
-plt.bar(names, accs, color=["steelblue", "orange", "forestgreen"])
+# chart 1 - overall accuracy bar chart
+plt.figure(figsize=(6, 4))
+names = list(results.keys())
+accs = [results[n]["accuracy"] * 100 for n in names]
+plt.bar(names, accs, color=["#6b7280", "#10b981"])
 plt.ylabel("accuracy (%)")
 plt.title("Model Accuracy Comparison")
 plt.ylim(0, 100)
 for i, v in enumerate(accs):
-    plt.text(i, v+1, f"{v:.1f}%", ha="center")
-
+    plt.text(i, v + 1, f"{v:.1f}%", ha="center")
 plt.tight_layout()
 plt.savefig("outputs/accuracy_comparison.png", dpi=150)
+print("saved outputs/accuracy_comparison.png")
 
-plt.figure(figsize=(7,4))
-x = np.arange(3)
-width = 0.25
-plt.bar(x-width, baseline_f1, width, label="Baseline", color="steelblue")
-plt.bar(x, lstm_f1, width, label="BiLSTM", color="orange")
-plt.bar(x + width, bert_f1, width, label="MentalBERT", color="forestgreen")
-plt.xticks(x, classes)
-plt.ylabel("F1 Score")
-plt.title("F1 Score For Each Model")
+# chart 2 - f1 per class grouped bar chart
+plt.figure(figsize=(7, 4))
+x = np.arange(len(classes))
+width = 0.35
+for i, (name, r) in enumerate(results.items()):
+    plt.bar(x + i * width, r["f1_per_class"], width, label=name)
+plt.xticks(x + width / 2, classes)
+plt.ylabel("f1 score")
+plt.title("f1 score per class")
 plt.legend()
 plt.tight_layout()
-plt.save_fig("outputs/f1_per_class.png", dpi=150)
-print("Saved charts")
+plt.savefig("outputs/f1_per_class.png", dpi=150)
+print("saved outputs/f1_per_class.png")
